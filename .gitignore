@@ -1,0 +1,4 @@
+*.zip
+*.bin
+results/
+*.code-workspace

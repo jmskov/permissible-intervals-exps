@@ -35,6 +35,34 @@ state_delta = 0.1
 discretization = UniformDiscretization(DiscreteState([0.0, 0.0, -1.0], [1.0, 1.0, 1.0]), [state_delta, state_delta, control_delta])
 abstraction = transition_intervals(discretization, system_image, process_noise_dist)
 
+# verify the symmetry of the transition matrices
+function find_state_idx(states, state_mean)
+    for (i, state) in enumerate(states)
+        foo = TransitionIntervals.mean(state)
+        if state_mean ≈ foo
+            return i
+        end
+    end
+end
+
+# now, assert that all possible targets are mirrored
+verify_mirror_flag = false 
+if verify_mirror_flag
+    for (j, source_state) in enumerate(abstraction.states)
+        state_mean = TransitionIntervals.mean(source_state)
+        state_idx = j
+        state_mirror = [state_mean[2]; state_mean[1]; state_mean[3]]
+        mirror_idx = find_state_idx(abstraction.states, state_mirror)
+        for (i, target_state) in enumerate(abstraction.states)
+            target_state_mean = TransitionIntervals.mean(target_state)
+            mirrored_target_state_mean = [target_state_mean[2]; target_state_mean[1]; target_state_mean[3]]
+            mirror_target_idx = find_state_idx(abstraction.states, mirrored_target_state_mean) 
+            @assert abstraction.Plow[i, state_idx] == abstraction.Plow[mirror_target_idx, mirror_idx]
+            @assert all(abstraction.Phigh[i, state_idx] .≈ abstraction.Phigh[mirror_target_idx, mirror_idx])
+        end
+    end
+end
+
 # parse out the transition matrices
 num_control_partitions = Int(2/control_delta) # todo: not manual
 num_states = Int(size(abstraction.states, 1)/num_control_partitions)

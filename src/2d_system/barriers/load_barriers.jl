@@ -1,14 +1,14 @@
 using MAT
 
-beta_filename = joinpath(@__DIR__, "beta_dual196.mat")
-indeces_filename = joinpath(@__DIR__, "indices196.mat")
+beta_filename = joinpath(@__DIR__, "beta_dual82.mat")
+indeces_filename = joinpath(@__DIR__, "indices82.mat")
 
 beta = matread(beta_filename)["beta_dual"] # 5x100 matrix... what is the order of the cols? will it follow the order of the states?
 
 indeces = matread(indeces_filename)["index_matrix"] # indeces is column of controls, with and the corresponding state index. these are the removed indeces
 
 # create a new dict of state to admissible control indeces
-admissible_controls = Dict{Int, Vector{Int}}
+admissible_controls = Dict{Int, Vector{Int}}()
 # add all the control indeces to the dict (1:5 for each state)
 for i=1:100
     admissible_controls[i] =  collect(1:5)

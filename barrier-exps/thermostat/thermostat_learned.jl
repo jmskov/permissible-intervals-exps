@@ -5,11 +5,11 @@ using Random
 using TransitionIntervals
 import TransitionIntervals.cdf
 
-include(joinpath(@__DIR__, "..", "gp_utilities.jl"))
+include(joinpath(@__DIR__, "../../shared", "gp_utilities.jl"))
 include(joinpath(@__DIR__, "..", "conversion_utils.jl"))
 
 # ARG 0. System Parameters
-results_dir = "$(@__DIR__)/results/test-mew"
+results_dir = "$(@__DIR__)/results/test"
 mkpath(results_dir)
 
 """ Dynamics function for thermostat
@@ -44,33 +44,11 @@ spacing = [state_delta, control_delta]
 discretization = UniformDiscretization(DiscreteState([20.0, 0.0], [23.0, 1.0]), spacing)
 
 # ARG 2. Specification File 
-spec_filename = "/workspace/src/specifications/2_bounded_until.toml"
-threshold = 0.9 # add this to the spec file
 process_distribution = Normal(0.0, σ_noise)
 
 gps, image_fcn, sigma_fcn = regress_and_build(dataset, process_distribution, rkhs_flag=true) 
 
 # RHKS Definitions
-mutable struct UniformRKHSError <: UniformError 
-    sigma::Float64
-    info_bound::Float64
-    f_sup::Float64
-    kernel_length::Float64
-    norm_bound::Float64
-    log_noise::Float64
-end
-
-function cdf(d::UniformRKHSError, x::Real)
-    if x < 0.0
-        return 0.0
-    end
-    R = exp(d.log_noise)
-    frac = x/(d.sigma)
-    dbound = exp(-0.5*(1/R*(frac - d.norm_bound))^2 + d.info_bound + 1.)
-    return 1. - min(dbound, 1.) # is this min needed?
-end
-
-# gps are same, just do first
 rkhs_error_dist = UniformRKHSError(
     -1.0, # sigma, set later
     info_gain_bound(gps[1]), # info_bound
@@ -82,25 +60,37 @@ rkhs_error_dist = UniformRKHSError(
 
 rkhs_copies = [deepcopy(rkhs_error_dist) for _ in 1:Threads.nthreads()]
 
-sigma_reuse_dict = Dict()
-function uncertainty_fcn(lower, upper; thread_idx=1)
-    # get uncertainty bounds
-    if haskey(sigma_reuse_dict, (lower, upper))
-        sigma = sigma_reuse_dict[(lower, upper)]
-    else 
-        σ_bound = sigma_fcn(lower, upper)
-        sigma = σ_bound[1]
-        sigma_reuse_dict[(lower, upper)] = σ_bound[1] 
+# get the states and bound the uncertainties.
+states = discretize(discretization)
+function bound_sigmas(states, sigma_fcn)
+    sigma_vec = Vector{Float64}(undef, length(states))
+    Threads.@threads for i in 1:length(states)
+        @views sigma_vec[i] = sigma_fcn(states[i].lower, states[i].upper) 
     end
+    return sigma_vec
+end
+sigma_vec = bound_sigmas(states, sigma_fcn)
+
+# create a dict we can actually use
+function make_sigma_dict(states, sigma_vec)
+    sigma_dict = Dict()
+    for (i, state) in enumerate(states)
+        sigma_dict[[state.lower, state.upper]] = sigma_vec[i]
+    end
+    return sigma_dict
+end
+sigma_dict = make_sigma_dict(states, sigma_vec)
+
+function uncertainty_fcn(lower, upper; thread_idx=1)
+    sigma = sigma_dict[[lower, upper]]
     dist = rkhs_copies[thread_idx]
     dist.sigma = sigma
     radius = sqrt(sum((upper - lower).^2))
     dist.norm_bound = RKHS_norm_bound(gps[1], dist.f_sup, radius)
-    # do other calculations here
     return dist
 end
 
-abstraction = transition_intervals(discretization, image_fcn, process_noise_dist, uncertainty_fcn)
+abstraction = transition_intervals(states, discretization, image_fcn, process_noise_dist, uncertainty_fcn)
 
 # abstraction = abstract(problem, results_dir)
 

@@ -6,9 +6,9 @@ using Distributions
 using SparseArrays
 using DimensionalData
 
+# todo: these includes are not ideal
 include(joinpath(@__DIR__, "..", "conversion_utils.jl"))
-# todo: put this in a package
-include("/Users/john/Projects/PhD/code/projects/gp-utilities/gp_utilities.jl")
+include(joinpath(@__DIR__, "../../shared", "gp_utilities.jl"))
 
 process_noise_dist = Normal(0.0, 0.01) 
 control_delta = 0.1

@@ -105,7 +105,6 @@ abstraction = transition_intervals(discretization, image_fcn, process_noise_dist
 # abstraction = abstract(problem, results_dir)
 
 # here, post-process to remove redunant rows from the transition matrices
-using StochasticBarrierFunctions
 using SparseArrays
 using DimensionalData
 
@@ -132,7 +131,6 @@ end
 @assert size(states,1) == size(Plows[1], 2) == size(Phighs[1], 2)
 
 for i=1:num_control_partitions
-    # ds = StochasticBarrierFunctions.create_probability_dataset(states, Plows[i], Phighs[i])
     save_dir = joinpath(results_dir, "thermostat_test_$(control_delta)")
     mkpath(save_dir)
     filename = joinpath(save_dir, "region_data_thermostat-test_$(num_states)-interval-$i.bin")

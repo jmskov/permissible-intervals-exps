@@ -6,8 +6,6 @@ using Distributions
 using SparseArrays
 using DimensionalData
 
-using StochasticBarrierFunctions
-
 include(joinpath(@__DIR__, "..", "conversion_utils.jl"))
 # todo: put this in a package
 include("/Users/john/Projects/PhD/code/projects/gp-utilities/gp_utilities.jl")

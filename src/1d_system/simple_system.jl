@@ -4,7 +4,6 @@ using SparseArrays
 using DimensionalData
 
 using TransitionIntervals
-using StochasticBarrierFunctions
 
 include(joinpath(@__DIR__, "..", "conversion_utils.jl"))
 

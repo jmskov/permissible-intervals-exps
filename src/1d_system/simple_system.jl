@@ -24,7 +24,6 @@ Plows, Phighs = get_transition_matrices_subset(abstraction, num_states, num_cont
 using LazySets
 using Serialization
 
-
 states = Vector{Hyperrectangle}(undef, num_states)
 ## convert states into Vector of Hyperrectangles
 for i=1:num_states

@@ -31,7 +31,7 @@ end
 process_noise_dist = Normal(0.0, 0.01) 
 control_delta = 0.1
 state_delta = 0.1
-discretization = UniformDiscretization(DiscreteState([0.0, 0.0, -1.0], [1.0, 1.0, 1.0]), [state_delta, state_delta, control_delta])
+discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0], [1.0, 1.0, 0.5]), [state_delta, state_delta, control_delta])
 abstraction = transition_intervals(discretization, system_image, process_noise_dist)
 
 # verify the symmetry of the transition matrices
@@ -63,10 +63,9 @@ if verify_mirror_flag
 end
 
 # parse out the transition matrices
-num_control_partitions = Int(2/control_delta) # todo: not manual
+num_control_partitions = Int(0.5/control_delta) # todo: not manual
 num_states = Int(size(abstraction.states, 1)/num_control_partitions)
-
-Plows, Phighs = get_transition_matrices_subset(abstraction, num_states, num_control_partitions)
+Plows, Phighs = convert_matrices_barriers(abstraction)
 
 # now save states and matrices in appropriate format
 using LazySets
@@ -87,7 +86,7 @@ end
 @assert size(states,1) == size(Plows[1], 2) == size(Phighs[1], 2)
 
 for i=1:num_control_partitions
-    save_dir = joinpath(@__DIR__, "simple_system_$(control_delta)")
+    save_dir = joinpath(@__DIR__, "simple_system_$(control_delta)_improve")
     mkpath(save_dir)
     filename = joinpath(save_dir, "region_data_simple-system_$(num_states)-interval-$i.bin")
     serialize(filename, Dict("states"=>states, "Plow"=>Plows[i], "Phigh"=>Phighs[i]))

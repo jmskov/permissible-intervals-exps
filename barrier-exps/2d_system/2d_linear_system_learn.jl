@@ -13,12 +13,12 @@ include(joinpath(@__DIR__, "../../shared", "gp_utilities.jl"))
 process_noise_dist = Normal(0.0, 0.01) 
 control_delta = 0.1
 state_delta = 0.1
-discretization = UniformDiscretization(DiscreteState([0.0, 0.0, -1.0], [1.0, 1.0, 1.0]), [state_delta, state_delta, control_delta])
+discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0], [1.0, 1.0, 0.5]), [state_delta, state_delta, control_delta])
 
 # add GP stuff here
 f_parse(x) = [0.5 0; 0 0.5]*x[1:2] + [1; 1]*x[3]
-N_data = 1000
-data_range = [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]]
+N_data = 3000
+data_range = [[0.0, 0.0, 0.0], [1.0, 1.0, 0.5]]
 @info "Generating dataset with $N_data data points"
 dataset = DataSandbox.sample_function(f_parse, data_range, N_data, process_noise_dist=process_noise_dist) 
 delta_flag = false 
@@ -71,10 +71,9 @@ end
 abstraction = transition_intervals(states, discretization, image_fcn, process_noise_dist, uncertainty_fcn)
 
 # parse out the transition matrices
-num_control_partitions = Int(2/control_delta) # todo: not manual
+num_control_partitions = Int(0.5/control_delta) # todo: not manual
 num_states = Int(size(abstraction.states, 1)/num_control_partitions)
-
-Plows, Phighs = get_transition_matrices_subset(abstraction, num_states, num_control_partitions)
+Plows, Phighs = convert_matrices_barriers(abstraction)
 
 # now save states and matrices in appropriate format
 using LazySets

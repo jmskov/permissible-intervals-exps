@@ -40,3 +40,32 @@ function get_transition_matrices_subset(abstraction, num_states, num_control_par
     # get the subset of the transition matrices
     return Plows, Phighs 
 end
+
+"""
+    This function saves the matrices and states in the appropriate format for the barrier function
+"""
+function convert_matrices_barriers(abstraction)
+    # get the transition matrices
+    Plows = [] 
+    Phighs = []
+    num_states = size(abstraction.Plow, 1)
+    num_control_partitions = Int((size(abstraction.Plow, 2)-1)/(num_states-1))
+    @info "num_control_partitions: $num_control_partitions"
+    axlist = (Dim{:to}(1:num_states), Dim{:from}(1:num_states - 1))
+
+    for i=1:num_control_partitions
+        @info "partition: $i"
+
+        Plow_sub = abstraction.Plow[:, 1+(i-1)*(num_states-1):i*(num_states-1)]
+        Phigh_sub = abstraction.Phigh[:, 1+(i-1)*(num_states-1):i*(num_states-1)]
+
+        Plow = DimArray(Plow_sub, axlist)
+        Phigh = DimArray(Phigh_sub, axlist)
+
+        push!(Plows, Plow)
+        push!(Phighs, Phigh)
+    end
+    
+    # get the subset of the transition matrices
+    return Plows, Phighs 
+end

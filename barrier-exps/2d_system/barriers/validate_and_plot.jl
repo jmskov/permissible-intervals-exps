@@ -27,6 +27,7 @@ eta = 1e-6  # always manual?
 init_state = [0.4 0.5; 0.4 0.5] # init region of barrier
 # the control intervals to choose from
 control_intervals = [[0.0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4], [0.4, 0.5]]
+num_controls = length(control_intervals)
 N_sim = 1000
 process_dist = Normal(0, 0.01)
 f_true(x) = [0.5 0; 0 0.5]*x[1:2] + [1; 1]*x[3] + rand(process_dist, (2,1))
@@ -34,6 +35,7 @@ f_true(x) = [0.5 0; 0 0.5]*x[1:2] + [1; 1]*x[3] + rand(process_dist, (2,1))
 END Manual Stuff
 ==#
 
+# > by construction, the product space iterates over the state regions before the control regions
 states = deserialize(states_filename)["states"][1:num_states]
 # parse out the states from the control 
 parsed_states = Vector{DiscreteState}(undef, num_states)
@@ -47,7 +49,7 @@ indeces = matread(indeces_filename)["index_matrix"] # indeces is column of contr
 admissible_controls = Dict{Int, Vector{Int}}()
 # add all the control indeces to the dict (1:5 for each state)
 for i=1:num_states
-    admissible_controls[i] =  collect(1:5)
+    admissible_controls[i] =  collect(1:num_controls)
 end
 # at the same time, create a dict version of the list
 removed_controls = Dict{Int, Vector{Int}}()

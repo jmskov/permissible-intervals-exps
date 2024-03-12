@@ -28,7 +28,8 @@ function system_image(lower, upper; thread_idx=1)
     return res[:,1], res[:,2]
 end
 
-process_noise_dist = Normal(0.0, 0.01) 
+noise_sigma = 0.01
+process_noise_dist = Normal(0.0, noise_sigma) 
 control_delta = 0.1
 state_delta = 0.1
 discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0], [1.0, 1.0, 0.5]), [state_delta, state_delta, control_delta])
@@ -85,9 +86,12 @@ end
 
 @assert size(states,1) == size(Plows[1], 2) == size(Phighs[1], 2)
 
+# todo: save data in a clean way
+save_dir = joinpath(@__DIR__, "simple_system_$(control_delta)ctl_$(noise_sigma)std")
+mkpath(save_dir)
 for i=1:num_control_partitions
-    save_dir = joinpath(@__DIR__, "simple_system_$(control_delta)_improve")
-    mkpath(save_dir)
     filename = joinpath(save_dir, "region_data_simple-system_$(num_states)-interval-$i.bin")
     serialize(filename, Dict("states"=>states, "Plow"=>Plows[i], "Phigh"=>Phighs[i]))
 end
+
+serialize(joinpath(save_dir, "states_$(num_states).bin"), Dict("states"=>abstraction.states))

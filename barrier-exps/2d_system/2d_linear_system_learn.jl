@@ -17,7 +17,7 @@ discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0], [1.0, 1.0,
 
 # add GP stuff here
 f_parse(x) = [0.5 0; 0 0.5]*x[1:2] + [1; 1]*x[3]
-N_data = 3000
+N_data = 2000
 data_range = [[0.0, 0.0, 0.0], [1.0, 1.0, 0.5]]
 @info "Generating dataset with $N_data data points"
 dataset = DataSandbox.sample_function(f_parse, data_range, N_data, process_noise_dist=process_noise_dist) 
@@ -28,9 +28,10 @@ gps, image_fcn, sigma_fcn = regress_and_build(dataset, process_noise_dist, rkhs_
 # gps are same, just do first
 rkhs_error_dist = UniformRKHSError(
     -1.0, # sigma, set later
-    info_gain_bound(gps[1]), # info_bound
+    0.01,
+    # info_gain_bound(gps[1]), # info_bound
     # 0.1,
-    2.0, # f_sup
+    1.0, # f_sup
     sqrt(gps[1].kernel.ℓ2),
     -1.0, # norm_bound, calculated later
     gps[1].logNoise.value # log_noise
@@ -93,10 +94,11 @@ end
 
 @assert size(states,1) == size(Plows[1], 2) == size(Phighs[1], 2)
 
+save_dir = joinpath(@__DIR__, "learned_2d_system_$(control_delta)_tmp")
+mkpath(save_dir)
 for i=1:num_control_partitions
-    save_dir = joinpath(@__DIR__, "learned_2d_system_$(control_delta)")
-    @info save_dir
-    mkpath(save_dir)
     filename = joinpath(save_dir, "region_data-learned_2d_system_$(num_states)-interval-$i.bin")
     serialize(filename, Dict("states"=>states, "Plow"=>Plows[i], "Phigh"=>Phighs[i]))
 end
+
+serialize(joinpath(save_dir, "states_$(num_states).bin"), Dict("states"=>abstraction.states))

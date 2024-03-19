@@ -14,12 +14,12 @@ noise_sigma = 0.01
 process_noise_dist = Normal(0.0, noise_sigma) 
 control_delta = 0.1
 state_delta = 0.1
-discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0], [1.0, 1.0, 0.5]), [state_delta, state_delta, control_delta])
+discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 0.5, 0.5]), [state_delta, state_delta, control_delta, control_delta])
 
 # add GP stuff here
-f_parse(x) = [0.5 0; 0 0.5]*x[1:2] + [1; 1]*x[3]
-N_data = 1000
-data_range = [[0.0, 0.0, 0.0], [1.0, 1.0, 0.5]]
+f_parse(x) = [0.5 0; 0 0.5]*x[1:2] + x[3:4]
+N_data = 3000
+data_range = [[0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 0.5, 0.5]]
 @info "Generating dataset with $N_data data points"
 dataset = DataSandbox.sample_function(f_parse, data_range, N_data, process_noise_dist=process_noise_dist) 
 delta_flag = false 
@@ -30,8 +30,7 @@ gps, image_fcn, sigma_fcn = regress_and_build(dataset, process_noise_dist, rkhs_
 # gps are same, just do first
 rkhs_error_dist = UniformRKHSError(
     -1.0, # sigma, set later
-    0.01,
-    # info_gain_bound(gps[1]), # info_bound
+    info_gain_bound(gps[1]), # info_bound
     # 0.1,
     1.0, # f_sup
     sqrt(gps[1].kernel.ℓ2),
@@ -74,7 +73,8 @@ end
 abstraction = transition_intervals(states, discretization, image_fcn, process_noise_dist, uncertainty_fcn)
 
 # parse out the transition matrices
-num_control_partitions = Int(0.5/control_delta) # todo: not manual
+# num_control_partitions = Int(0.5/control_delta) # todo: not manual
+num_control_partitions = Int((size(abstraction.Plow, 2)-1)/(size(abstraction.Plow, 1)-1))
 num_states = Int(size(abstraction.states, 1)/num_control_partitions)
 Plows, Phighs = convert_matrices_barriers(abstraction)
 
@@ -96,7 +96,7 @@ end
 
 @assert size(states,1) == size(Plows[1], 2) == size(Phighs[1], 2)
 
-save_dir = joinpath(@__DIR__, "simple_system_learned_$(control_delta)ctl_$(noise_sigma)std_$N_data-data")
+save_dir = joinpath(@__DIR__, "multi_system_learned_$(control_delta)ctl_$(noise_sigma)std_$N_data-data")
 mkpath(save_dir)
 for i=1:num_control_partitions
     filename = joinpath(save_dir, "region_data-learned_2d_system_$(num_states)-interval-$i.bin")

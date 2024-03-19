@@ -2,17 +2,15 @@
 using Distributions
 using SparseArrays
 using DimensionalData
-using MAT
 
 using TransitionIntervals
-include(joinpath(@__DIR__, "invariant.jl"))
 
 include(joinpath(@__DIR__, "..", "conversion_utils.jl"))
 
 # abstraction
 function system_image(lower, upper; thread_idx=1)
     # x' = Ax + Bu where B = [1 1]
-    A = [0.5 0; 0 0.5]
+    A = [0.50 0; 0 0.5]
 
     c1 = A * lower[1:2]
     c2 = A * upper[1:2]
@@ -20,21 +18,20 @@ function system_image(lower, upper; thread_idx=1)
     c4 = A * [upper[1]; lower[2]]
 
     res = zeros(2,2)
-    u_lb = lower[3]
-    u_ub = upper[3]
+    # u_lb = lower[3]
+    # u_ub = upper[3]
     for i=1:2
-        res[i,1] = min(c1[i], c2[i], c3[i], c4[i]) + u_lb
-        res[i,2] = max(c1[i], c2[i], c3[i], c4[i]) + u_ub
+        res[i,1] = min(c1[i], c2[i], c3[i], c4[i]) + lower[2+i]
+        res[i,2] = max(c1[i], c2[i], c3[i], c4[i]) + upper[2+i] 
     end
 
     return res[:,1], res[:,2]
 end
 
-noise_sigma = 0.01
-process_noise_dist = Normal(0.0, noise_sigma) 
+process_noise_dist = Normal(0.0, 0.01) 
 control_delta = 0.1
 state_delta = 0.1
-discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0], [1.0, 1.0, 0.5]), [state_delta, state_delta, control_delta])
+discretization = UniformDiscretization(DiscreteState([0.0, 0.0, 0.0, 0.0], [1.0, 1.0, 0.5, 0.5]), [state_delta, state_delta, control_delta, control_delta])
 abstraction = transition_intervals(discretization, system_image, process_noise_dist)
 
 # verify the symmetry of the transition matrices
@@ -66,7 +63,7 @@ if verify_mirror_flag
 end
 
 # parse out the transition matrices
-num_control_partitions = Int(0.5/control_delta) # todo: not manual
+num_control_partitions = Int(0.5/control_delta)^2 # todo: not manual
 num_states = Int(size(abstraction.states, 1)/num_control_partitions)
 Plows, Phighs = convert_matrices_barriers(abstraction)
 
@@ -88,17 +85,17 @@ end
 
 @assert size(states,1) == size(Plows[1], 2) == size(Phighs[1], 2)
 
-# todo: save data in a clean way
-save_dir = joinpath(@__DIR__, "simple_system_$(control_delta)ctl_$(noise_sigma)std")
-mkpath(save_dir)
+save_dir = joinpath(@__DIR__, "simple_system_$(control_delta)_multi")
 for i=1:num_control_partitions
+    mkpath(save_dir)
     filename = joinpath(save_dir, "region_data_simple-system_$(num_states)-interval-$i.bin")
     serialize(filename, Dict("states"=>states, "Plow"=>Plows[i], "Phigh"=>Phighs[i]))
 end
 
-serialize(joinpath(save_dir, "states_$(num_states).bin"), Dict("states"=>abstraction.states))
+serialize(joinpath(save_dir, "states.bin"), Dict("states"=>abstraction.states))
 
-result = quick_reachability(abstraction.Phigh, thresh=0.0000001)
+
+result = quick_reachability(abstraction.Phigh, thresh=0.005)
 # save the result
 
 file = matopen(joinpath(save_dir, "indices_imdp.mat"), "w")

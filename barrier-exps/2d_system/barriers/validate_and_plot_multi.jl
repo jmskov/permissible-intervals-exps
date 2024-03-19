@@ -2,7 +2,6 @@ using Distributions
 using MAT
 using Serialization
 using Plots
-default(fmt=:png)
 using Printf
 
 using TransitionIntervals
@@ -11,12 +10,12 @@ using TransitionIntervals
 # todo: this should not be manual
 START Manual Stuff
 ==#
-indeces_filename = "/Users/john/Projects/PhD/code/GaussianProcessBarrier.jl/StochasticBarrierFunctions/synthesize/data/final/3d_linear/gp2000/indices_ceg.mat"
-states_filename = "/Users/john/Projects/PhD/code/projects/barriers-gps/barrier-exps/2d_system/simple_system_0.1ctl_0.01std/states_100.bin" 
+indeces_filename = "/Users/john/Projects/PhD/code/GaussianProcessBarrier.jl/StochasticBarrierFunctions/synthesize/data/final/4d_linear/known/indices_ceg.mat"
+states_filename = "/Users/john/Projects/PhD/code/projects/barriers-gps/barrier-exps/2d_system/simple_system_0.1_multi/states.bin" 
 
-title_tag = "CEGS Known"
 savedir = dirname(indeces_filename)
 num_states = 100 # number of state-space regions, not the product space
+title_tag = "Dual Batch"
 
 # barrier stuff
 N = 100     # horizon for Psafe
@@ -26,9 +25,18 @@ eta = 1e-6  # always manual?
 init_state = [0.4 0.5; 0.4 0.5] # init region of barrier
 # init_state = [0.0 1.0; 0.0 1.0] # init region of barrier
 # the control intervals to choose from
-control_intervals = [[0.0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4], [0.4, 0.5]]
+all_intervals = [[0.0, 0.1], [0.1, 0.2], [0.2, 0.3], [0.3, 0.4], [0.4, 0.5]]
+
+control_intervals = []
+for int2 in all_intervals
+    for int1 in all_intervals
+        push!(control_intervals, [int1, int2])
+    end
+end
+
+
 num_controls = length(control_intervals)
-N_sim = 100
+N_sim = 1000
 process_dist = Normal(0, 0.01)
 f_true(x) = [0.5 0; 0 0.5]*x[1:2] + [1; 1]*x[3] + rand(process_dist, (2,1))
 #==
@@ -94,7 +102,11 @@ end
 @info "The P_safe_bound is $P_safe_bound"
 
 # now, simulate!
-# todo: find homes for these functions
+using Distributions
+process_dist = Normal(0, 0.01)
+f_true(x) = [0.5 0; 0 0.5]*x[1:2] + [x[3]; x[4]] + rand(process_dist, (2,1))
+
+init_state = [0.4 0.5; 0.4 0.5]
 init_state_ds = DiscreteState(init_state[:,1], init_state[:,2])
 function get_init_state(range)
     new_state = zeros(size(range, 1), 1)
@@ -118,7 +130,12 @@ function get_discrete_control(admissible_dict, state_idx)
 end
 
 function sample_control(control_intervals, control_idx)
-    return rand(Uniform(control_intervals[control_idx][1], control_intervals[control_idx][2]), 1)[1]
+
+    control = zeros(2,1)
+    for i=1:2
+        control[i] = rand(Uniform(control_intervals[control_idx][i][1], control_intervals[control_idx][i][2]), 1)[1]
+    end
+    return control 
 end
 
 num_violate = 0
@@ -131,16 +148,16 @@ for i=1:N_sim
     new_traj[:,1] = state
     next_state = state
     for j=2:N
-        control_idx = get_discrete_control(admissible_controls, next_state_idx)
-        control = sample_control(control_intervals, control_idx)
-        next_state = f_true([next_state; control])
+        control_idx1 = get_discrete_control(admissible_controls, next_state_idx)
+        control1 = sample_control(control_intervals, control_idx1)
+        next_state = f_true([next_state; control1])
         next_state_idx = get_state_idx(parsed_states, next_state)
         new_traj[:,j] = next_state
-        if next_state_idx in zero_states
+        if next_state_idx in zero_states || isnothing(next_state_idx)
             global num_violate
             @info "Violation at iteration $i"
             num_violate += 1
-            continue
+            break
         end
     end
     push!(trajectories, new_traj)
@@ -154,8 +171,8 @@ function adv_trajectory(init_state, admissible_controls, control_intervals, f_tr
     next_state_idx = get_state_idx(parsed_states, state)
     num_good = 1
     for j=2:N
-        control_idx = minimum(admissible_controls[next_state_idx]) 
-        control = minimum(control_intervals[control_idx]) 
+        control_idx = maximum(admissible_controls[next_state_idx]) 
+        control = maximum(control_intervals[control_idx]) 
         next_state = f_true([next_state; control])
         next_state_idx = get_state_idx(parsed_states, next_state)
         adv_traj[:,j] = next_state
@@ -174,12 +191,10 @@ adv_traj_nonadmissible = adv_trajectory(init_state, all_controls, control_interv
 
 # get formatted string to 5 decimal places for P_safe_bound
 P_safe_bound_str = @sprintf("%.5f", P_safe_bound)
-# plt = Plots.plot(title="$title_tag - $(N_sim) Trajectories (N=$N) - $(num_violate) Violations - Pviolate: $(P_safe_bound_str)", xlabel="x1", ylabel="x2", size=(400, 400), dpi=200) 
+# plt = Plots.plot(title="$title_tag - $(N_sim) Trajectories (N=$N) - $(num_violate) Violations - Pviolate: $(P_safe_bound_str)", xlabel="x1", ylabel="x2", size=(800, 800), dpi=200) 
 plt = Plots.plot(title="", xlabel="", ylabel="", size=(600, 600), dpi=200) 
-
-
 full_state = DiscreteState([0.0, 0.0], [1.0, 1.0])
-TransitionIntervals.plot!(plt, full_state, color=:green, alpha=0.05, linewidth=0, linecolor=:black, label="Full State")
+TransitionIntervals.plot!(plt, full_state, color=:green, alpha=0.05, linewidth=2, linecolor=:black, label="Full State")
 
 for traj in trajectories
     Plots.plot!(plt, traj[1,:], traj[2,:], label="", alpha=0.1)
@@ -188,22 +203,19 @@ end
 Plots.plot!(plt, adv_traj_nonadmissible[1,:], adv_traj_nonadmissible[2,:], label="Adv., non-admiss.", color=:black, linewidth=2, linestyle=:dash)
 Plots.plot!(plt, adv_traj_test[1,:], adv_traj_test[2,:], label="Adv., adm.", color=:black, linewidth=2)
 
-#plot initial state
 TransitionIntervals.plot!(plt, init_state_ds, color=:black, alpha=0.3, label="Initial State")
 mkpath(savedir)
 savefig(plt, "$savedir/trajectories.png")
 serialize("$savedir/trajectories.bin", plt)
 
 for key in keys(removed_controls)
-    # TransitionIntervals.annotate!(plt, states[key], "$(removed_controls[key])", color=:blue, fontsize=5)
+    # TransitionIntervals.annotate!(plt, states[key], "$(length(removed_controls[key]))/$(length(control_intervals))", color=:blue, fontsize=5)
     TransitionIntervals.annotate!(plt, states[key], "$(length(removed_controls[key]))", color=:black, fontsize=12)
     TransitionIntervals.plot!(plt, states[key], color=:black, fillalpha=0.0, linewidth=2, label="")
-    Plots.plot!(plt, legend=:topleft)
 end
+Plots.plot!(plt, legend=:topleft)
 savefig(plt, "$savedir/trajectories_annotate.png")
 serialize("$savedir/trajectories_annotate.bin", plt)
-
-display(plt)
 
 # save the max beta as plain text
 filename = joinpath(savedir, "psafe.txt")

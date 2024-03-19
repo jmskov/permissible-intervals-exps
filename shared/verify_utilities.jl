@@ -1,16 +1,24 @@
 using IntervalMDP
+using TOML
+using Colors
 
 using TransitionIntervals
+
+VERIFY_PLOT_COLORS = [
+    colorant"#D6FAFF"
+    colorant"#00AFF5"
+    colorant"#D55672"
+]
 
 function verify_and_plot(abstraction, spec_filename; p_threshold=0.99)
     reach, avoid = terminal_states(spec_filename, abstraction.states)
     result = verify(abstraction, reach, avoid)
     sat_states = findall(result[1:end-1,3] .>= p_threshold)
-    plt = plot(abstraction.states[sat_states]; fillcolor=:blue, label="", aspect_ratio=1, linewidth=0, fillalpha=0.7)
+    plt = plot(abstraction.states[sat_states]; fillcolor=VERIFY_PLOT_COLORS[2], label="", aspect_ratio=1, linewidth=0, fillalpha=0.7)
     unsat_states = findall(result[1:end-1,4] .< p_threshold)
-    plot!(plt, abstraction.states[unsat_states]; fillcolor=:red, label="", linewidth=0, fillalpha=0.7)
+    plot!(plt, abstraction.states[unsat_states]; fillcolor=VERIFY_PLOT_COLORS[3], label="", linewidth=0, fillalpha=0.7)
     amb_states = setdiff(1:length(result[:,1])-1, union(sat_states, unsat_states))
-    plot!(plt, abstraction.states[amb_states]; fillcolor=:grey, label="", linewidth=0, fillalpha=0.5)
+    plot!(plt, abstraction.states[amb_states]; fillcolor=VERIFY_PLOT_COLORS[1], label="", linewidth=0, fillalpha=0.5)
     display(plt)
     return plt, amb_states
 end
@@ -27,11 +35,11 @@ end
 
 function plot_verification(abstraction, result; p_threshold=0.99)
     sat_states = findall(result[1:end-1,3] .>= p_threshold)
-    plt = plot(abstraction.states[sat_states]; fillcolor=:blue, label="", aspect_ratio=1, linewidth=0, fillalpha=0.7)
+    plt = plot(abstraction.states[sat_states]; fillcolor=VERIFY_PLOT_COLORS[2], label="", aspect_ratio=1, linewidth=0, fillalpha=0.7)
     unsat_states = findall(result[1:end-1,4] .< p_threshold)
-    plot!(plt, abstraction.states[unsat_states]; fillcolor=:red, label="", linewidth=0, fillalpha=0.7)
+    plot!(plt, abstraction.states[unsat_states]; fillcolor=VERIFY_PLOT_COLORS[3], label="", linewidth=0, fillalpha=0.7)
     amb_states = setdiff(1:length(result[:,1])-1, union(sat_states, unsat_states))
-    plot!(plt, abstraction.states[amb_states]; fillcolor=:grey, label="", linewidth=0, fillalpha=0.5)
+    plot!(plt, abstraction.states[amb_states]; fillcolor=VERIFY_PLOT_COLORS[1], label="", linewidth=0, fillalpha=0.5)
     display(plt)
     return plt
 end
@@ -209,3 +217,25 @@ function load_PCTL_specification(spec_filename::String)
     return lbl_fcn, labels_dict, ϕ1, ϕ2, unsafe_label, spec_data["steps"], spec_data["name"]
 end
 
+function get_state_labels_plotting(spec_filename::String)
+    f = open(spec_filename)
+    spec_data = TOML.parse(f)
+    close(f)
+
+    labels_map = spec_data["labels"]["map"]
+    labels_dict = Dict(labels_map[1] => [], labels_map[2]  => [], labels_map[3]  => [])
+    dims = spec_data["dims"]
+    for geometry in spec_data["labels"]["phi1"]
+        push!(labels_dict[labels_map[1]], reshape(geometry, dims, 2))
+    end
+
+    for geometry in spec_data["labels"]["phi2"]
+        push!(labels_dict[labels_map[2]], reshape(geometry, dims, 2))
+    end
+
+    for geometry in spec_data["labels"]["unsafe"]
+        push!(labels_dict[labels_map[3]], reshape(geometry, dims, 2))
+    end
+
+    return labels_dict
+end

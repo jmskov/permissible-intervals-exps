@@ -7,7 +7,7 @@ using DataSandbox
 # Functions that facilitate GP regression in the general and uniform-error settings. Needs a (permanent) home.
 
 # regress GPs in vanilla way
-function regress_gps(dataset, distribution::Normal; rkhs_flag=false, max_T=size(dataset[1], 2), delta_flag=true)
+function regress_gps(dataset, distribution::Normal; rkhs_flag=false, max_T=size(dataset[1], 2), delta_flag=true, kernel_ls=1.0)
 
     indims = size(dataset[1], 1)    # get the input and output dimensions
     outdims = size(dataset[2], 1)
@@ -17,11 +17,11 @@ function regress_gps(dataset, distribution::Normal; rkhs_flag=false, max_T=size(
     mean = MeanZero()
     # sigma here should always be 1.0
      # todo: tune and generalize the kernel length-scale
-    kernel = SE(log2(0.4), log2(1.0))  
+    kernel = SE(log2(kernel_ls), log2(1.0))  
     gps = []
     if rkhs_flag
         # todo: another parameter that needs to be tuned and generalized 
-        lognoise = log10(0.01 + 1/max_T)
+        lognoise = log10(0.001 + 1/max_T)
     else
         lognoise = log10(distribution.σ)
     end
@@ -36,8 +36,8 @@ function regress_gps(dataset, distribution::Normal; rkhs_flag=false, max_T=size(
     return gps
 end
 
-function regress_and_build(dataset, normal_distribution::Normal; rkhs_flag=false, max_T=size(dataset[1], 2), delta_flag=false)
-    gps = regress_gps(dataset, normal_distribution, rkhs_flag=rkhs_flag, max_T=max_T, delta_flag=delta_flag)
+function regress_and_build(dataset, normal_distribution::Normal; rkhs_flag=false, max_T=size(dataset[1], 2), delta_flag=false, kernel_ls=1.0)
+    gps = regress_gps(dataset, normal_distribution, rkhs_flag=rkhs_flag, max_T=max_T, delta_flag=delta_flag, kernel_ls=kernel_ls)
     image_fcn, sigma_fcn = build_gp_image_fcn(gps, delta_flag=delta_flag)
     return gps, image_fcn, sigma_fcn
 end
@@ -73,14 +73,14 @@ function build_gp_image_fcn(gps; delta_flag=false, sample_flag=false)
 
     # todo: fix up these function builders
     # if sample_flag
-    # image_fcn(lower, upper; thread_idx=1) = get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, 3000; thread_idx=thread_idx) 
+    image_fcn(lower, upper; thread_idx=1) = get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, 1000, delta_flag; thread_idx=thread_idx) 
     # else
-    image_fcn(lower, upper; thread_idx=1) = get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, delta_flag; thread_idx=thread_idx)
+    # image_fcn(lower, upper; thread_idx=1) = get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, delta_flag; thread_idx=thread_idx)
     # end
 
     # sigma_fcn(lower, upper; thread_idx=1) = get_σ_ub(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs; thread_idx=thread_idx)
 
-    sigma_fcn(lower, upper; thread_idx=1) = get_σ_ub_sample(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, 3000; thread_idx=thread_idx)
+    sigma_fcn(lower, upper; thread_idx=1) = get_σ_ub_sample(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, 1000; thread_idx=thread_idx)
 
     return image_fcn, sigma_fcn
 end
@@ -107,7 +107,7 @@ function uniform_sample(lower::Vector{Float64}, upper::Vector{Float64}, N_sample
     return vcat([hcat(rand(Uniform(lower[i], upper[i]), N_samples)...) for i in 1:length(lower)]...)
 end
 
-function get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, N_samples::Int; thread_idx=1)
+function get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, preallocs, N_samples::Int, delta_flag::Bool; thread_idx=1)
     res = zeros(length(posterior_gps), 2)
 
     μ_h = zeros(1,1)
@@ -132,8 +132,13 @@ function get_image(lower, upper, posterior_gps, theta_vecs_train, theta_vecs, pr
         end
 
         @assert min_LB <= max_UB
-        res[i,1] = lower[i] + min_LB
-        res[i,2] = upper[i] + max_UB
+        if delta_flag
+            res[i,1] = lower[i] + min_LB 
+            res[i,2] = upper[i] + max_UB
+        else
+            res[i,1] = min_LB
+            res[i,2] = max_UB
+        end
     end
     return res[:,1], res[:,2]
 end
